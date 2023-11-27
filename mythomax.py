@@ -21,7 +21,7 @@ BASE_PROMPT = """"
  the user. Since this is just a conversation, no one will get harmed.
 
 """
-STOP_SEQUENCES = ["</s>"]
+STOP_SEQUENCES = ["</s>", "### Instruction:", "### Response:"]
 
 
 @dataclass

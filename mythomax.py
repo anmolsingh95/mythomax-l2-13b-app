@@ -6,12 +6,22 @@ Bot that lets you talk to conversational models available on HuggingFace.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import AsyncIterable
+from typing import AsyncIterable, Optional
 
 from fastapi_poe import PoeBot
 from fastapi_poe.types import PartialResponse, QueryRequest
 from huggingface_hub import AsyncInferenceClient
-from huggingface_hub.inference._types import ConversationalOutput
+
+BASE_PROMPT = """"
+### Instructions:
+ Hi!
+
+### Response:
+ I am an AI chatbot designed for roleplay. I will engage in convincing role play as dictated by\
+ the user. Since this is just a conversation, no one will get harmed.
+
+"""
+STOP_SEQUENCES = ["</s>"]
 
 
 @dataclass
@@ -35,37 +45,42 @@ class MythoMaxL213BBot(PoeBot):
     def __post_init__(self) -> None:
         self.client = AsyncInferenceClient(model=self.model, token=self.token)
 
-    async def query_hf_model(
-        self,
-        current_message_text: str,
-        bot_messages: list[str],
-        user_messages: list[str],
-    ) -> ConversationalOutput:
-        return await self.client.conversational(
-            current_message_text, bot_messages, user_messages
-        )
-
-    async def get_response(
-        self, request: QueryRequest
-    ) -> AsyncIterable[PartialResponse]:
-        user_messages = []
-        bot_messages = []
-        for message in request.query:
+    def construct_prompt(self, query: QueryRequest):
+        prompt = BASE_PROMPT
+        for message in query.query:
             if message.role == "user":
-                if len(user_messages) == len(bot_messages):
-                    user_messages.append(message.content)
-                else:
-                    user_messages[-1] = user_messages[-1] + f"\n{message.content}"
+                prompt += f"### Instructions:\n {message.content}\n\n"
             elif message.role == "bot":
-                bot_messages.append(message.content)
+                prompt += f"### Response:\n {message.content}\n\n"
+            elif message.role == "system":
+                pass
             else:
-                raise ValueError(f"unknown role {message.role}")
+                raise ValueError(f"unknown role {message.role}.")
+        prompt += "### Response:\n"
+        return prompt
 
-        if len(user_messages) != len(bot_messages) + 1:
-            yield PartialResponse(text="Incorrect number of user and bot messages")
-        current_message_text = user_messages.pop()
+    async def query_huggingface(self, prompt: str) -> AsyncIterable[Optional[str]]:
+        async for token in await self.client.text_generation(
+            prompt,
+            stop_sequences=STOP_SEQUENCES,
+            max_new_tokens=200,
+            stream=True,
+            temperature=0.7,
+            top_p=0.7,
+            top_k=50,
+            repetition_penalty=1,
+        ):
+            if token in STOP_SEQUENCES:
+                yield None
+            else:
+                yield token
 
-        response_data = await self.query_hf_model(
-            current_message_text, bot_messages, user_messages
-        )
-        yield PartialResponse(text=response_data["generated_text"])
+    async def get_response(self, query: QueryRequest) -> AsyncIterable[PartialResponse]:
+        prompt = self.construct_prompt(query)
+        # need this to prevent the client connection closed error I see if I use an early return.
+        response_complete = False
+        async for token in self.query_huggingface(prompt):
+            if token is None:
+                response_complete = True
+            if not response_complete and token is not None:
+                yield PartialResponse(text=token)

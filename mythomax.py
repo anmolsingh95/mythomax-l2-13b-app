@@ -6,14 +6,14 @@ Bot that lets you talk to conversational models available on HuggingFace.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import AsyncIterable, Optional
+from typing import AsyncIterable
 
 from fastapi_poe import PoeBot
 from fastapi_poe.types import PartialResponse, QueryRequest
 from huggingface_hub import AsyncInferenceClient
 
 BASE_PROMPT = """"
-### Instructions:
+### Instruction:
  Hi!
 
 ### Response:
@@ -49,7 +49,7 @@ class MythoMaxL213BBot(PoeBot):
         prompt = BASE_PROMPT
         for message in query.query:
             if message.role == "user":
-                prompt += f"### Instructions:\n {message.content}\n\n"
+                prompt += f"### Instruction:\n {message.content}\n\n"
             elif message.role == "bot":
                 prompt += f"### Response:\n {message.content}\n\n"
             elif message.role == "system":
@@ -59,7 +59,7 @@ class MythoMaxL213BBot(PoeBot):
         prompt += "### Response:\n"
         return prompt
 
-    async def query_huggingface(self, prompt: str) -> AsyncIterable[Optional[str]]:
+    async def query_huggingface(self, prompt: str) -> AsyncIterable[str | None]:
         async for token in await self.client.text_generation(
             prompt,
             stop_sequences=STOP_SEQUENCES,

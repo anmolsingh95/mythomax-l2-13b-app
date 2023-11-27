@@ -33,7 +33,7 @@ class MythoMaxL213BBot(PoeBot):
     token: str
 
     def __post_init__(self) -> None:
-        self.client = AsyncInferenceClient(model=self.model)
+        self.client = AsyncInferenceClient(model=self.model, token=self.token)
 
     async def query_hf_model(
         self,

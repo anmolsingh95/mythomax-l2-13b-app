@@ -63,7 +63,7 @@ class MythoMaxL213BBot(PoeBot):
         async for token in await self.client.text_generation(
             prompt,
             stop_sequences=STOP_SEQUENCES,
-            max_new_tokens=200,
+            max_new_tokens=400,
             stream=True,
             temperature=0.7,
             top_p=0.7,
